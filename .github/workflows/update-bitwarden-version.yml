@@ -86,6 +86,86 @@ jobs:
           if [ -n "$PR_NUMBER" ]; then
             echo "Enabling auto-merge for PR #$PR_NUMBER"
             gh pr merge $PR_NUMBER --auto --squash
+            echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
           else
             echo "Could not find PR to enable auto-merge"
+            exit 1
           fi
+        id: auto-merge
+
+      - name: Wait for PR to be merged
+        if: steps.compare.outputs.needs_update == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ steps.auto-merge.outputs.pr_number }}"
+          echo "Waiting for PR #$PR_NUMBER to be merged..."
+
+          # Wait up to 5 minutes for PR to be merged
+          for i in {1..60}; do
+            PR_STATE=$(gh pr view $PR_NUMBER --json state --jq '.state')
+            if [ "$PR_STATE" = "MERGED" ]; then
+              echo "PR #$PR_NUMBER has been merged!"
+              break
+            fi
+            echo "PR state: $PR_STATE, waiting... (attempt $i/60)"
+            sleep 5
+          done
+
+          # Verify it was merged
+          PR_STATE=$(gh pr view $PR_NUMBER --json state --jq '.state')
+          if [ "$PR_STATE" != "MERGED" ]; then
+            echo "PR was not merged within timeout period"
+            exit 1
+          fi
+
+      - name: Checkout updated main branch
+        if: steps.compare.outputs.needs_update == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Check if release exists
+        if: steps.compare.outputs.needs_update == 'true'
+        id: check-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.latest-release.outputs.version }}"
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Release $VERSION already exists"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Release $VERSION does not exist"
+          fi
+
+      - name: Create GitHub Release
+        if: steps.compare.outputs.needs_update == 'true' && steps.check-release.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.latest-release.outputs.version }}"
+
+          # Create release notes
+          cat > release_notes.md << EOF
+          ## Bitwarden CLI $VERSION
+
+          This release updates the container image to use Bitwarden CLI version $VERSION.
+
+          **Bitwarden Release Notes:** https://github.com/bitwarden/clients/releases/tag/cli-v$VERSION
+
+          ### Container Image
+
+          \`\`\`bash
+          docker pull ghcr.io/morey-tech/bitwarden-cli:$VERSION
+          docker pull ghcr.io/morey-tech/bitwarden-cli:latest
+          \`\`\`
+          EOF
+
+          # Create the release
+          gh release create "$VERSION" \
+            --title "Bitwarden CLI $VERSION" \
+            --notes-file release_notes.md
+
+          echo "Created release $VERSION"
