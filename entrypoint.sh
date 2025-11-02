@@ -3,21 +3,17 @@ set -e
 
 echo ''
 echo 'Configuring Bitwarden CLI server URL'
-echo ''
-bw config server ${BW_HOST}
+bw config server ${BW_HOST} --nointeraction
 
 echo ''
 echo 'Logging into Bitwarden CLI'
-echo ''
-bw login --apikey
+bw login --apikey --nointeraction
 export BW_SESSION=$(bw unlock ${BW_PASSWORD} --raw)
 
 echo ''
 echo 'Validating Bitwarden unlock'
-echo ''
-bw unlock --check
+bw unlock --check --nointeraction
 
 echo ''
 echo 'Running `bw server` on port 8087'
-echo ''
-bw serve --hostname 0.0.0.0 --port 8087
+bw serve --hostname 0.0.0.0 --port 8087 --nointeraction
