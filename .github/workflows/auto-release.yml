@@ -1,0 +1,68 @@
+name: Auto Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'Dockerfile'
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract version from Dockerfile
+        id: version
+        run: |
+          VERSION=$(grep 'ENV BW_CLI_VERSION=' Dockerfile | sed 's/ENV BW_CLI_VERSION=//')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION"
+
+      - name: Check if release exists
+        id: check-release
+        run: |
+          if gh release view "${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Release ${{ steps.version.outputs.version }} already exists"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Release ${{ steps.version.outputs.version }} does not exist"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Release
+        if: steps.check-release.outputs.exists == 'false'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Create release notes
+          cat > release_notes.md << EOF
+          ## Bitwarden CLI $VERSION
+
+          This release updates the container image to use Bitwarden CLI version $VERSION.
+
+          **Bitwarden Release Notes:** https://github.com/bitwarden/clients/releases/tag/cli-v$VERSION
+
+          ### Container Image
+
+          \`\`\`bash
+          docker pull ghcr.io/morey-tech/bitwarden-cli:$VERSION
+          docker pull ghcr.io/morey-tech/bitwarden-cli:latest
+          \`\`\`
+          EOF
+
+          # Create the release
+          gh release create "$VERSION" \
+            --title "Bitwarden CLI $VERSION" \
+            --notes-file release_notes.md
+
+          echo "Created release $VERSION"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

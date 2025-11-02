@@ -1,0 +1,91 @@
+name: Update Bitwarden CLI Version
+
+on:
+  schedule:
+    # Run every Monday at 9 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:  # Allow manual trigger
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get latest Bitwarden CLI release
+        id: latest-release
+        run: |
+          # Fetch latest release from Bitwarden clients repo
+          LATEST_VERSION=$(curl -s https://api.github.com/repos/bitwarden/clients/releases | \
+            jq -r '[.[] | select(.tag_name | startswith("cli-v"))] | .[0].tag_name' | \
+            sed 's/cli-v//')
+          echo "version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+          echo "Latest Bitwarden CLI version: $LATEST_VERSION"
+
+      - name: Get current version from Dockerfile
+        id: current-version
+        run: |
+          CURRENT_VERSION=$(grep 'ENV BW_CLI_VERSION=' Dockerfile | sed 's/ENV BW_CLI_VERSION=//')
+          echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "Current version in Dockerfile: $CURRENT_VERSION"
+
+      - name: Compare versions
+        id: compare
+        run: |
+          LATEST="${{ steps.latest-release.outputs.version }}"
+          CURRENT="${{ steps.current-version.outputs.version }}"
+
+          if [ "$LATEST" != "$CURRENT" ]; then
+            echo "needs_update=true" >> $GITHUB_OUTPUT
+            echo "New version available: $LATEST (current: $CURRENT)"
+          else
+            echo "needs_update=false" >> $GITHUB_OUTPUT
+            echo "Already on latest version: $CURRENT"
+          fi
+
+      - name: Update Dockerfile
+        if: steps.compare.outputs.needs_update == 'true'
+        run: |
+          NEW_VERSION="${{ steps.latest-release.outputs.version }}"
+          sed -i "s/ENV BW_CLI_VERSION=.*/ENV BW_CLI_VERSION=$NEW_VERSION/" Dockerfile
+          echo "Updated Dockerfile to version $NEW_VERSION"
+
+      - name: Create Pull Request
+        if: steps.compare.outputs.needs_update == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: update Bitwarden CLI to ${{ steps.latest-release.outputs.version }}"
+          title: "chore: update Bitwarden CLI to ${{ steps.latest-release.outputs.version }}"
+          body: |
+            Updates Bitwarden CLI version from `${{ steps.current-version.outputs.version }}` to `${{ steps.latest-release.outputs.version }}`.
+
+            **Release Notes:** https://github.com/bitwarden/clients/releases/tag/cli-v${{ steps.latest-release.outputs.version }}
+
+            This PR was automatically created by the update-bitwarden-version workflow.
+          branch: update-bitwarden-${{ steps.latest-release.outputs.version }}
+          labels: dependencies
+          delete-branch: true
+
+      - name: Enable auto-merge
+        if: steps.compare.outputs.needs_update == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Wait a moment for PR to be created
+          sleep 5
+
+          # Get the PR number
+          PR_NUMBER=$(gh pr list --head "update-bitwarden-${{ steps.latest-release.outputs.version }}" --json number --jq '.[0].number')
+
+          if [ -n "$PR_NUMBER" ]; then
+            echo "Enabling auto-merge for PR #$PR_NUMBER"
+            gh pr merge $PR_NUMBER --auto --squash
+          else
+            echo "Could not find PR to enable auto-merge"
+          fi
