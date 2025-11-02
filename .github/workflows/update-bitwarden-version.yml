@@ -21,12 +21,40 @@ jobs:
       - name: Get latest Bitwarden CLI release
         id: latest-release
         run: |
-          # Fetch latest release from Bitwarden clients repo
-          LATEST_VERSION=$(curl -s https://api.github.com/repos/bitwarden/clients/releases | \
-            jq -r '[.[] | select(.tag_name | startswith("cli-v"))] | .[0].tag_name' | \
-            sed 's/cli-v//')
-          echo "version=$LATEST_VERSION" >> $GITHUB_OUTPUT
-          echo "Latest Bitwarden CLI version: $LATEST_VERSION"
+          # Fetch latest release from Bitwarden clients repo with retry mechanism
+          MAX_RETRIES=3
+          RETRY_DELAY=5
+
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Attempt $i of $MAX_RETRIES to fetch latest release..."
+
+            RESPONSE=$(curl -s --retry 3 --retry-delay 2 \
+              https://api.github.com/repos/bitwarden/clients/releases)
+
+            # Check if response is valid JSON
+            if echo "$RESPONSE" | jq empty 2>/dev/null; then
+              LATEST_VERSION=$(echo "$RESPONSE" | \
+                jq -r '[.[] | select(.tag_name | startswith("cli-v"))] | .[0].tag_name' | \
+                sed 's/cli-v//')
+
+              # Verify we got a valid version
+              if [ -n "$LATEST_VERSION" ] && [ "$LATEST_VERSION" != "null" ]; then
+                echo "version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+                echo "Latest Bitwarden CLI version: $LATEST_VERSION"
+                exit 0
+              fi
+            fi
+
+            echo "Failed to fetch valid version. Response: $(echo "$RESPONSE" | head -c 200)"
+
+            if [ $i -lt $MAX_RETRIES ]; then
+              echo "Retrying in $RETRY_DELAY seconds..."
+              sleep $RETRY_DELAY
+            fi
+          done
+
+          echo "Error: Failed to fetch latest version after $MAX_RETRIES attempts"
+          exit 1
 
       - name: Get current version from Dockerfile
         id: current-version
