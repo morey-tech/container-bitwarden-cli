@@ -186,6 +186,8 @@ jobs:
           tags: |
             ghcr.io/morey-tech/bitwarden-cli:latest
             ghcr.io/morey-tech/bitwarden-cli:${{ steps.latest-release.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Create GitHub Release
         if: steps.compare.outputs.needs_update == 'true' && steps.check-release.outputs.exists == 'false'
