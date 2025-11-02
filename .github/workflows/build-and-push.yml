@@ -31,11 +31,11 @@ jobs:
 
           # Add custom tag if provided
           if [ -n "${{ inputs.tag }}" ]; then
-            TAGS="$TAGS,ghcr.io/morey-tech/bitwarden-cli:${{ inputs.tag }}"
+            TAGS="ghcr.io/morey-tech/bitwarden-cli:${{ inputs.tag }}"
           else
             # Use branch name as tag (sanitize it for Docker)
             SANITIZED_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9._-]/-/g')
-            TAGS="$TAGS,ghcr.io/morey-tech/bitwarden-cli:$SANITIZED_BRANCH"
+            TAGS="ghcr.io/morey-tech/bitwarden-cli:$SANITIZED_BRANCH"
           fi
 
           # Add latest tag if requested
@@ -70,14 +70,8 @@ jobs:
         run: |
           echo "## Container Image Published" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Bitwarden CLI Version:** ${{ steps.get-version.outputs.bw_version }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Tags:**" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "${{ steps.determine-tags.outputs.tags }}" | tr ',' '\n' >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Pull command:**" >> $GITHUB_STEP_SUMMARY
-          echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ghcr.io/morey-tech/bitwarden-cli:${{ steps.get-version.outputs.bw_version }}" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
