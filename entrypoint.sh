@@ -20,4 +20,4 @@ bw unlock --check
 echo ''
 echo 'Running `bw server` on port 8087'
 echo ''
-bw serve --hostname 0.0.0.0 #--disable-origin-protection
+bw serve --hostname 0.0.0.0 --port 8087
