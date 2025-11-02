@@ -8,6 +8,7 @@ bw login --apikey
 export BW_SESSION=$(bw unlock ${BW_PASSWORD} --raw)
 bw unlock --check
 
+echo ''
 echo 'Running `bw server` on port 8087'
 echo ''
 
