@@ -1,7 +1,7 @@
 # Builder stage - download and extract Bitwarden CLI
 FROM registry.access.redhat.com/ubi10/ubi:latest AS builder
 
-ENV BW_CLI_VERSION=2025.11.0
+ENV BW_CLI_VERSION=2025.10.0
 
 RUN dnf install -y wget unzip libstdc++ && \
     wget https://github.com/bitwarden/clients/releases/download/cli-v${BW_CLI_VERSION}/bw-linux-${BW_CLI_VERSION}.zip && \
