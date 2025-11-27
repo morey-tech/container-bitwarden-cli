@@ -21,17 +21,19 @@ COPY --from=builder /lib64/libgcc_s.so.1 /lib64/libgcc_s.so.1
 # Copy entrypoint script
 COPY entrypoint.sh /entrypoint.sh
 
-# Create non-root user and set up directories
+# Create non-root user and set up directories with OpenShift compatibility
+# Use GID 0 (root group) and group-writable permissions for arbitrary UIDs
 RUN chmod +x /entrypoint.sh && \
-    useradd -u 1000 -m -d /home/bwcli bwcli && \
+    useradd -u 1000 -g 0 -m -d /home/bwcli bwcli && \
     mkdir -p /home/bwcli/.config/Bitwarden\ CLI && \
-    chown -R bwcli:bwcli /home/bwcli && \
-    chown bwcli:bwcli /usr/local/bin/bw /entrypoint.sh
+    chown -R 1000:0 /home/bwcli && \
+    chmod -R g=u /home/bwcli && \
+    chmod 775 /home/bwcli /home/bwcli/.config /home/bwcli/.config/Bitwarden\ CLI
 
 # Set environment variables
 ENV HOME=/home/bwcli
 
-# Switch to non-root user
-USER bwcli
+# Switch to non-root user (OpenShift will override UID but keep GID 0)
+USER 1000
 
 CMD ["/entrypoint.sh"]
