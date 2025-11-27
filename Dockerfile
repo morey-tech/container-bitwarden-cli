@@ -21,6 +21,17 @@ COPY --from=builder /lib64/libgcc_s.so.1 /lib64/libgcc_s.so.1
 # Copy entrypoint script
 COPY entrypoint.sh /entrypoint.sh
 
-RUN chmod +x /entrypoint.sh
+# Create non-root user and set up directories
+RUN chmod +x /entrypoint.sh && \
+    useradd -u 1000 -m -d /home/bwcli bwcli && \
+    mkdir -p /home/bwcli/.config/Bitwarden\ CLI && \
+    chown -R bwcli:bwcli /home/bwcli && \
+    chown bwcli:bwcli /usr/local/bin/bw /entrypoint.sh
+
+# Set environment variables
+ENV HOME=/home/bwcli
+
+# Switch to non-root user
+USER bwcli
 
 CMD ["/entrypoint.sh"]
